@@ -1,95 +1,105 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+'use client';
+
+import { ConnectButton, ConnectEmbed, useActiveAccount } from "thirdweb/react";
+import { client } from "./client";
+import { chain } from "./chain";
+import { useState } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { useElements, useStripe, PaymentElement, Elements } from "@stripe/react-stripe-js";
 
 export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>src/app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const account = useActiveAccount();
+  const [clientSecret, setClientSecret] = useState<string>("");
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+    throw new Error("No Stripe publishable key found");
+  }
+
+  const stripe = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+
+  const onClick = async () => {
+    const res = await fetch("/api/stripe-intent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ buyerWalletAddress: account?.address }),
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      setClientSecret(json.clientSecret);
+    }
+  };
+
+  return (
+    <div>
+      {account ? (
+        <>
+          <ConnectEmbed client={client} chain={chain} />
+          <div>
+            {!clientSecret ? (
+              <button onClick={onClick} disabled={!account}>
+                Buy with credit card
+              </button>
+            ) : (
+              <Elements
+                options={{
+                  clientSecret: clientSecret,
+                  appearance: { theme: "night" },
+                }}
+                stripe={stripe}
+              >
+                <CreditCardForm />
+              </Elements>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <p>TEST</p>
+          <ConnectButton client={client} chain={chain} />
+          <div>Hello</div>
+        </>
+      )}
     </div>
   );
+}
+
+
+const CreditCardForm = ()=>{
+  const elements = useElements();
+  const stripe = useStripe();
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isComplete, setIsCompleted] = useState<boolean>(false);
+  const onClick = async () =>{
+    if(!stripe || !elements){
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const {paymentIntent, error} = await stripe.confirmPayment({
+        elements,
+        confirmParams:{
+          return_url:"http://localhost:3000",
+        },
+        redirect:"if_required"
+      })
+      if(error){
+        throw error.message;
+      }
+      if(paymentIntent.status === "succeeded"){
+        setIsCompleted(true);
+        alert ("success")
+      }
+    } catch (error) {
+      alert("There is an error")
+    }
+  };
+  return(
+    <>
+      <PaymentElement/>
+      <button onClick={onClick} disabled = {isLoading || isComplete || !stripe || !elements}>
+        {isComplete?"Payment completed":isLoading?"Payment processing":"Pay Now"}
+      </button>
+    </>
+  )
 }
