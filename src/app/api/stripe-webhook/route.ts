@@ -22,7 +22,7 @@ export async function POST(req: NextRequest){
         throw 'Error';
     }
     const body = await req.text();
-    const sig = headers().get("stripe-signature") as string;
+    const sig = (await headers()).get("stripe-signature") as string;
     if(!sig){
         throw 'No signature Provided';
     }
@@ -67,6 +67,8 @@ const handleChargeSucceeded =async (charge: Stripe.Charge)=>{
             }
     )
     if(!tx.ok){
+        const errorMessage = await tx.text();
+        console.error('Failed to mint NFT:', errorMessage);
         throw 'Failed to mint NFT';
     }
     }catch(error){

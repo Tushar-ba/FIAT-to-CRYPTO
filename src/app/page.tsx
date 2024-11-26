@@ -1,15 +1,23 @@
 'use client';
 
-import { ConnectButton, ConnectEmbed, useActiveAccount } from "thirdweb/react";
+import { ConnectButton, ConnectEmbed, MediaRenderer, useActiveAccount, useReadContract } from "thirdweb/react";
 import { client } from "./client";
 import { chain } from "./chain";
 import { useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { useElements, useStripe, PaymentElement, Elements } from "@stripe/react-stripe-js";
+import { getContractMetadata } from "thirdweb/extensions/common";
+import {contract} from "../../utils/contracts"
 
 export default function Home() {
   const account = useActiveAccount();
   const [clientSecret, setClientSecret] = useState<string>("");
+  const {data: contractMetadata } = useReadContract(
+    getContractMetadata,
+    {
+      contract : contract,
+    }
+  );
 
   if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
     throw new Error("No Stripe publishable key found");
@@ -29,12 +37,15 @@ export default function Home() {
       setClientSecret(json.clientSecret);
     }
   };
-
-  return (
+ if(!account){
+  return(
     <div>
-      {account ? (
-        <>
-          <ConnectEmbed client={client} chain={chain} />
+        <h1>Test </h1>
+        <ConnectEmbed client={client} chain={chain} />
+    </div>
+ )}
+  return (
+    <div>  
           <div>
             {!clientSecret ? (
               <button onClick={onClick} disabled={!account}>
@@ -52,14 +63,18 @@ export default function Home() {
               </Elements>
             )}
           </div>
-        </>
-      ) : (
         <>
           <p>TEST</p>
           <ConnectButton client={client} chain={chain} />
-          <div>Hello</div>
+          {contractMetadata && (
+            <div>
+              <MediaRenderer
+                client = {client}
+                src = {contractMetadata.image}
+              />
+            </div>
+          )}
         </>
-      )}
     </div>
   );
 }
